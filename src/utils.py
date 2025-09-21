@@ -32,7 +32,12 @@ def rmse(y_true, y_pred) -> float:
 
 
 def mape(y_true, y_pred) -> float:
-    y_true = np.asarray(y_true)
-    y_pred = np.asarray(y_pred)
-    eps = 1e-8
+    """
+    Smoothed MAPE: avoids explosion when y_true is zero or near-zero
+    by using an epsilon floor on the denominator.
+    """
+    y_true = np.asarray(y_true).astype(float)
+    y_pred = np.asarray(y_pred).astype(float)
+    eps = 1e-3   # floor for small denominators; adjust if needed
     return np.mean(np.abs((y_true - y_pred) / np.maximum(np.abs(y_true), eps))) * 100.0
+
