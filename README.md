@@ -1,18 +1,17 @@
-# Adversarial Time-Series Forecasting (UCI + M4)
+# Adversarial Time‑Series Forecasting (UCI + M4)
 
-Robustness experiments for time-series forecasting under adversarial perturbations.  
-Implements **Ridge** and **LSTM** pipelines with **FGSM/PGD** attacks and a **TSAS** (temporal smoothing) defense.  
-Supports **UCI Electricity** and **M4** datasets. Includes grid-search tuners that output a single leaderboard CSV (no per-config clutter).
+Robustness experiments for time‑series forecasting under adversarial perturbations.
 
----
+Implements:
+- **Ridge** (lag features)
+- **LSTM** (PyTorch)
+- **DeepAR** (PyTorch Forecasting)
+- **TFT** — Temporal Fusion Transformer (PyTorch Forecasting)
 
-## ✨ Highlights
-- **Datasets:** UCI Electricity (15-min), M4 (Hourly/Daily/…)
-- **Models:** Ridge (lagged features), LSTM (PyTorch)
-- **Attacks:** FGSM & PGD (feature-space for Ridge, tensor-space for LSTM)
-- **Defense:** TSAS smoothing (`moving_avg`, optional `wavelet` if `pywavelets` installed)
-- **Tuning:** One-command grid search → **single leaderboard CSV**
-- **Clean outputs:** Metrics CSVs + optional plots per run (plots off for big grids)
+Attacks: **FGSM/PGD** (feature‑space for Ridge, tensor‑space for LSTM; DeepAR/TFT baseline now, adversarial hooks next).  
+Defense: **TSAS** temporal smoothing (`moving_avg`, optional `wavelet`).  
+Datasets: **UCI Electricity** (15‑min), **M4** (Hourly, etc.).  
+Includes grid‑search tuners with **single leaderboard CSV** outputs (no per‑config clutter).
 
 ---
 
@@ -24,143 +23,132 @@ src/
   defenses.py
   pipeline_ridge.py
   pipeline_lstm.py
+  pipeline_deepar.py
+  pipeline_tft.py
   tune_ridge.py
   tune_lstm.py
-  uci_data_prep.py        # (kept for back-compat; data_prep.py is used now)
+  pf_data.py              # bridge: wide → long for PF models (DeepAR/TFT)
+  uci_data_prep.py        # (legacy; kept for back‑compat)
   utils.py
 datasets/
   UCI/LD2011_2014.txt     # (ignored by git)
   M4/Hourly-train.csv     # (ignored by git)
 results/                  # metrics, plots, leaderboards (ignored by git)
 ```
-> `datasets/` and `results/` are git-ignored. Keep an empty `results/.gitkeep` if you want the folder tracked.
+> `datasets/` and `results/` are git‑ignored. Keep an empty `results/.gitkeep` if you want the folder tracked.
 
 ---
 
-## 🔧 Setup
+## 🔧 Setup (with `requirements.txt`)
+
+Create a virtual environment and install all dependencies via the pinned **`requirements.txt`** in this repo:
+
 ```bash
+# 1) create + activate venv
 python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+
+# 2) install all deps
 pip install -r requirements.txt
+
+# 3) (optional) verify key versions
+python - <<'PY'
+import lightning as L, pytorch_forecasting as pf, torchmetrics as tm
+print("lightning:", L.__version__, "| PF:", pf.__version__, "| TM:", tm.__version__)
+PY
 ```
 
-**`requirements.txt` (minimum):**
-```
-pandas
-numpy
-scikit-learn
-matplotlib
-torch
-pywavelets    # optional, only for wavelet TSAS
-```
+> If you are on macOS with Apple Silicon and hit MPS attention errors with TFT, run that pipeline with `--device cpu` or a smaller `--batch_size` (see commands below).
 
 ---
 
 ## 📥 Datasets
+**UCI Electricity** → `datasets/UCI/LD2011_2014.txt`  
+- CSV with `sep=";"`, `decimal=","`, first column datetime. We resample to `--freq` (default `15min`).
 
-### UCI Electricity
-Place the file at:
-```
-datasets/UCI/LD2011_2014.txt
-```
-The loader expects `sep=";"`, `decimal=","`, first column is datetime (15-min sampling).
-
-### M4 (e.g., Hourly)
-Put train CSVs like:
-```
-datasets/M4/Hourly-train.csv
-```
-The loader reads “wide” format (`id, v1, v2, ...`) and right-aligns variable-length series internally.
+**M4** (e.g., Hourly) → `datasets/M4/Hourly-train.csv`  
+- Wide format (`id, v1, v2, ...`). Loader right‑aligns series internally; `pf_data.py` converts to long for PF models.
 
 ---
 
 ## ▶️ Quickstart
 
-### Ridge on UCI
+### Ridge (UCI)
 ```bash
 python -m src.pipeline_ridge   --dataset uci   --csv datasets/UCI/LD2011_2014.txt   --freq 15min   --alpha 1.0   --attack fgsm --epsilon 0.05   --defense tsas --smoother moving_avg --window 5   --test_size 0.2 --max_clients 5   --output_metrics_path results/uci_ridge_metrics.csv   --output_plot_dir results/uci_plots
 ```
 
-### Ridge on M4 (Hourly)
+### Ridge (M4 Hourly)
 ```bash
-python -m src.pipeline_ridge   --dataset m4   --csv datasets/M4/Hourly-train.csv   --alpha 0.1   --attack none --defense tsas --window 3   --test_size 0.2 --max_clients 50   --output_metrics_path results/m4_hourly_ridge_metrics.csv   --output_plot_dir results/m4_hourly_plots
+python -m src.pipeline_ridge   --dataset m4   --csv datasets/M4/Hourly-train.csv   --alpha 0.1   --attack none --defense tsas --window 3   --test_size 0.2 --max_clients 50   --output_metrics_path results/m4_hourly_ridge_metrics.csv   --output_plot_dir results/m4_hourly_ridge_plots
 ```
 
-### LSTM on UCI
+### LSTM (UCI)
 ```bash
 python -m src.pipeline_lstm   --dataset uci   --csv datasets/UCI/LD2011_2014.txt   --freq 15min   --hidden_size 64 --num_layers 2   --attack none --defense none   --epochs 5 --max_clients 5   --output_metrics_path results/uci_lstm_metrics.csv   --output_plot_dir results/uci_lstm_plots
 ```
 
-### LSTM on M4 (Hourly)
+### LSTM (M4 Hourly)
 ```bash
 python -m src.pipeline_lstm   --dataset m4   --csv datasets/M4/Hourly-train.csv   --hidden_size 64 --num_layers 2   --attack fgsm --epsilon 0.05   --defense tsas --window 5   --epochs 5 --max_clients 20   --output_metrics_path results/m4_hourly_lstm_metrics.csv   --output_plot_dir results/m4_hourly_lstm_plots
 ```
-> `--max_clients -1` runs **all** series (can be heavy).
+
+### DeepAR (UCI)
+```bash
+python -m src.pipeline_deepar   --dataset uci   --csv datasets/UCI/LD2011_2014.txt   --freq 15min   --max_clients 50   --max_encoder_length 48 --max_prediction_length 1   --epochs 10   --output_metrics_path results/uci_deepar_metrics.csv
+```
+
+### DeepAR (M4 Hourly)
+```bash
+python -m src.pipeline_deepar   --dataset m4   --csv datasets/M4/Hourly-train.csv   --max_clients 50   --max_encoder_length 48 --max_prediction_length 1   --epochs 10   --output_metrics_path results/m4_hourly_deepar_metrics.csv
+```
+
+### TFT (UCI) — CPU default (MPS can error on attention)
+```bash
+python -m src.pipeline_tft   --dataset uci   --csv datasets/UCI/LD2011_2014.txt   --freq 15min   --max_clients 10   --max_encoder_length 48 --max_prediction_length 1   --hidden_size 64 --attention_head_size 4 --dropout 0.1   --epochs 3   --device cpu --batch_size 32   --output_metrics_path results/uci_tft_metrics.csv
+```
+
+### TFT (M4 Hourly) — try `--device mps --batch_size 16` if you want GPU on Mac
+```bash
+python -m src.pipeline_tft   --dataset m4   --csv datasets/M4/Hourly-train.csv   --max_clients 20   --max_encoder_length 48 --max_prediction_length 1   --hidden_size 64 --attention_head_size 4 --dropout 0.1   --epochs 3   --device cpu --batch_size 32   --output_metrics_path results/m4_hourly_tft_metrics.csv
+```
+
+> PF models (DeepAR/TFT) use **`pf_data.py`** to convert wide → long (`unique_id`, `time_idx`, `y`). Horizon=1 for parity with Ridge/LSTM metrics.
 
 ---
 
-## 🛡️ Attacks & Defense
-- **Ridge attacks:** feature-space FGSM/PGD → `attacks.fgsm_attack_features`, `attacks.pgd_attack_features`
-- **LSTM attacks:** tensor-space FGSM/PGD → `attacks.fgsm_attack_torch`, `attacks.pgd_attack_torch`
-- **Defense (TSAS):** `defenses.tsas_smooth_feature_matrix` with `moving_avg` (default) or `wavelet` (requires `pywavelets`)
-
----
-
-## 🔎 Tuning (Leaderboards Only)
-
-Both tuners run a grid and **do not** save per-config plots/CSVs. They aggregate each run’s metrics in-memory and save a **single leaderboard CSV**.
+## 🔎 Tuning
 
 ### Ridge
 ```bash
 python -m src.tune_ridge
 ```
-- Output: `results/tuning/leaderboard_ridge_*.csv`  
-- Also writes a **robust-only** leaderboard (filters `attack != none`).
-
-**Sample top results (20 clients):**
-```
-Best (by mean_RMSE_DEF):
-  dataset=m4, alpha=0.1, attack=none, defense=tsas, window=3
-  mean_RMSE_CLEAN≈199.52, mean_RMSE_DEF≈164.09, defense_recovery≈35.43
-
-Best robust (attack ∈ {fgsm, pgd}):
-  dataset=m4, alpha=0.1, attack=fgsm, epsilon=0.01, defense=tsas, window=3
-  mean_RMSE_DEF≈164.10, robust_drop≈0.021, defense_recovery≈35.44
-`````
+- Saves: `results/tuning/leaderboard_ridge_*.csv` (and a **robust‑only** leaderboard).  
+- Sample best (20 clients, Hourly): `alpha=0.1, defense=tsas(window=3)`.
 
 ### LSTM
 ```bash
 python -m src.tune_lstm
 ```
-- Output: `results/tuning_lstm/leaderboard_lstm_*.csv`  
-- Also writes a **robust-only** leaderboard.
+- Saves: `results/tuning/leaderboard_lstm_*.csv`.  
+- Grid includes `hidden_size`, `attack ∈ {none, fgsm, pgd}`, `epsilon`, `defense`, `window`.  
+- Defaults are light (epochs/clients) for speed—bump for final sweeps.
 
-> Tune lists (hidden size, layers, epochs, epsilon, etc.) are defined at the top of each tuner. Increase `max_clients` for more stable averages.
-
----
-
-## 📈 Reproducing Final Tables
-
-1) **Baseline best** (e.g., Ridge M4 Hourly):
-```bash
-python -m src.pipeline_ridge   --dataset m4 --csv datasets/M4/Hourly-train.csv   --alpha 0.1 --attack none --defense tsas --window 3   --test_size 0.2 --max_clients -1   --output_metrics_path results/final_baseline_m4_hourly_ridge.csv   --output_plot_dir results/final_baseline_plots
-```
-
-2) **Best robust** (from robust leaderboard top row):
-```bash
-python -m src.pipeline_ridge   --dataset m4 --csv datasets/M4/Hourly-train.csv   --alpha 0.1 --attack fgsm --epsilon 0.01   --defense tsas --window 3   --test_size 0.2 --max_clients -1   --output_metrics_path results/final_robust_m4_hourly_ridge.csv   --output_plot_dir results/final_robust_plots
-```
-
-> Suppress plotting in programmatic runs via `run_pipeline(..., save_plots=False)` (tuners already do this).
+> DeepAR/TFT tuners can be added next in the same leaderboard‑only style once adversarial hooks are wired.
 
 ---
 
-## 🧪 Implementation Notes
-- **Feature engineering:** `utils.make_lag_features` builds `lag_*` and optional rolling stats.
-- **Temporal split:** `utils.train_test_split_time` is order-preserving.
-- **Metrics:** `utils.rmse`, `utils.mape` (+ MAE where used).
-- **M4 loading:** `data_prep.load_m4_wide` right-aligns variable-length series into a wide DF; feature generation safely drops NaNs.
-- **Reproducibility:** Use fixed seeds where needed; small fluctuations are expected with stochastic training.
+## 🧪 Notes & Tips
+- **Suppress warnings but keep progress bars** (optional): add in PF pipelines:
+  ```python
+  import warnings, logging
+  warnings.filterwarnings("ignore", message="X does not have valid feature names, but StandardScaler was fitted with feature names")
+  warnings.filterwarnings("ignore", category=FutureWarning, module="pytorch_forecasting")
+  logging.getLogger("pytorch_forecasting").setLevel(logging.ERROR)
+  logging.getLogger("lightning.pytorch").setLevel(logging.ERROR)
+  ```
+- **TFT on macOS/MPS:** known `MPSNDArray` buffer errors with attention. Use `--device cpu` or try smaller `--batch_size` on `--device mps`.
+- **Reproducibility:** we set `seed_everything(seed, workers=True)` in PF pipelines. Some variability is expected.
 
 ---
 
@@ -183,13 +171,12 @@ results/
 ---
 
 ## 🗺️ Roadmap
-- Add **TFT** or other deep forecasters (N-BEATS, PatchTST)
-- Add **cross-dataset evaluations** (UCI + multiple M4 frequencies)
-- Add **composite robust score** (e.g., `mean_RMSE_DEF + λ·robust_drop`)
-- Finalize a **paper-style report** + curated plots for the README
+- Add adversarial evaluation to DeepAR/TFT (FGSM/PGD on encoder inputs).  
+- Extend experiments to multiple M4 frequencies.  
+- Composite robust score for ranking configs.  
+- Final report + curated plots for README.
 
 ---
 
-## 📝 Citation
-If you use this repo, consider citing the M4 competition:
-> Spyros Makridakis, Evangelos Spiliotis, and Vassilios Assimakopoulos. *The M4 Competition: 100,000 time series and 61 forecasting methods*. IJF 2018.
+## 📝 References
+- Makridakis, Spiliotis, Assimakopoulos. *The M4 Competition: 100,000 time series and 61 forecasting methods*. IJF, 2018.
