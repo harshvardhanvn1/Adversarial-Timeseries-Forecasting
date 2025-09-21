@@ -1,0 +1,27 @@
+# Core scientific stack
+numpy
+pandas
+scikit-learn
+
+# Deep learning
+torch
+torchvision
+torchaudio
+
+# Time series + forecasting
+pytorch-lightning>=1.7.0
+pytorch-forecasting>=0.10.3
+
+# Visualization
+matplotlib
+seaborn
+
+# Adversarial defenses
+pywavelets  # for wavelet-based TSAS smoothing
+
+# Utilities
+tqdm
+
+# Jupyter (if you want notebooks)
+jupyter
+ipykernel

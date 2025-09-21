@@ -1,12 +1,21 @@
-# Virtual environments
+# venv & Python cruft
 .venv/
 __pycache__/
 *.pyc
-
-# Datasets
-datasets/
-results/
+*.pyo
+*.pyd
+*.DS_Store
 
 # IDE
 .vscode/
 .idea/
+
+# local data & heavy results
+datasets/
+results/
+!results/.gitkeep
+
+# caches
+*.ipynb_checkpoints
+
+lightning_logs/
