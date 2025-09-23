@@ -6,7 +6,7 @@ Implements:
 - **Ridge** (lag features)
 - **LSTM** (PyTorch)
 - **DeepAR** (PyTorch Forecasting)
-- **TFT** — Temporal Fusion Transformer (PyTorch Forecasting)
+- **TFT** - Temporal Fusion Transformer (PyTorch Forecasting)
 
 Attacks: **FGSM/PGD** (feature‑space for Ridge, tensor‑space for LSTM; DeepAR/TFT baseline now, adversarial hooks next).  
 Defense: **TSAS** temporal smoothing (`moving_avg`, optional `wavelet`).  
